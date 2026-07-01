@@ -23,7 +23,6 @@ void commons_log_vprintf(commons_log_level level, const char *tag, const char *f
     if (brk != NULL) {
         *brk = '\0';
     }
-    FILE *output = stdout;
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     ts.tv_sec -= ts_init.tv_sec;
@@ -32,17 +31,19 @@ void commons_log_vprintf(commons_log_level level, const char *tag, const char *f
         ts.tv_sec--;
         ts.tv_nsec += 1000000000;
     }
+    /* PmLog is the real structured sink on webOS (routed to pmlog/journald).
+     * The former fprintf(stdout/stderr, ...) duplicate has been removed: on the
+     * deployed app those fds are pipes that can block unboundedly, and this
+     * runs inline on the VideoRecv thread where per-dropped-frame log storms
+     * fire during loss recovery. */
     switch (level) {
         case COMMONS_LOG_LEVEL_FATAL:
-            output = stderr;
             PmLogCritical(context, tag, 0, "[%ld.%03ld] %s", ts.tv_sec, ts.tv_nsec / 1000000, msg);
             break;
         case COMMONS_LOG_LEVEL_ERROR:
-            output = stderr;
             PmLogError(context, tag, 0, "[%ld.%03ld] %s", ts.tv_sec, ts.tv_nsec / 1000000, msg);
             break;
         case COMMONS_LOG_LEVEL_WARN:
-            output = stderr;
             PmLogWarning(context, tag, 0, "[%ld.%03ld] %s", ts.tv_sec, ts.tv_nsec / 1000000, msg);
             break;
         case COMMONS_LOG_LEVEL_INFO:
@@ -53,5 +54,4 @@ void commons_log_vprintf(commons_log_level level, const char *tag, const char *f
             PmLogDebug(context, "[%ld.%03ld] %s", ts.tv_sec, ts.tv_nsec / 1000000, msg);
             break;
     }
-    fprintf(output, "[%ld.%03ld][%s] %s\n", ts.tv_sec, ts.tv_nsec / 1000000, tag, msg);
 }
