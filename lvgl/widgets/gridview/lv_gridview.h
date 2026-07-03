@@ -147,6 +147,13 @@ int lv_gridview_get_focused_index(lv_obj_t *obj);
 void lv_gridview_set_key_focus_clamp(lv_obj_t *obj, bool enable);
 
 /**
+ * Move focus by one visible page (remote scroll wheel / page keys).
+ * @param obj Grid view object
+ * @param down true for page down, false for page up
+ */
+void lv_gridview_page(lv_obj_t *obj, bool down);
+
+/**
  * Ask adapter to bind all the visible items again
  * @param obj
  */

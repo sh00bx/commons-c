@@ -243,6 +243,7 @@ bool lv_gridview_focus(lv_obj_t *obj, int position) {
     if (!will_focus) return false;
     grid->focused_index = position;
     lv_event_send(will_focus, LV_EVENT_FOCUSED, lv_indev_get_act());
+    lv_obj_scroll_to_view_recursive(will_focus, LV_ANIM_ON);
     return true;
 }
 
@@ -260,6 +261,29 @@ int lv_gridview_get_focused_index(lv_obj_t *obj) {
 void lv_gridview_set_key_focus_clamp(lv_obj_t *obj, bool enable) {
     lv_grid_t *grid = (lv_grid_t *) obj;
     grid->key_focus_clamp = enable;
+}
+
+void lv_gridview_page(lv_obj_t *obj, bool down) {
+    lv_grid_t *grid = (lv_grid_t *) obj;
+    if (grid->item_count <= 0 || grid->column_count <= 0) {
+        return;
+    }
+    lv_coord_t row_step = grid->row_height + grid->pad_row;
+    if (row_step <= 0) {
+        row_step = grid->row_height > 0 ? grid->row_height : 1;
+    }
+    int visible_rows = (int) (lv_obj_get_content_height(obj) / row_step);
+    if (visible_rows < 1) {
+        visible_rows = 1;
+    }
+    int page_items = visible_rows * grid->column_count;
+    int index = grid->focused_index;
+    if (index < 0) {
+        index = 0;
+    }
+    index += down ? page_items : -page_items;
+    index = LV_CLAMP(0, index, grid->item_count - 1);
+    lv_gridview_focus(obj, index);
 }
 
 void lv_gridview_rebind(lv_obj_t *obj) {
@@ -438,6 +462,16 @@ static void key_cb(lv_grid_t *grid, lv_event_t *e) {
         case LV_KEY_DOWN:
             offset = grid->column_count;
             break;
+        case LV_KEY_PREV:
+            lv_gridview_page((lv_obj_t *) grid, false);
+            lv_event_stop_processing(e);
+            lv_event_stop_bubbling(e);
+            return;
+        case LV_KEY_NEXT:
+            lv_gridview_page((lv_obj_t *) grid, true);
+            lv_event_stop_processing(e);
+            lv_event_stop_bubbling(e);
+            return;
         default:
             return;
     }
@@ -455,6 +489,7 @@ static void key_cb(lv_grid_t *grid, lv_event_t *e) {
     }
     if (lv_gridview_focus((lv_obj_t *) grid, focus_position)) {
         lv_event_stop_processing(e);
+        lv_event_stop_bubbling(e);
     }
 }
 
@@ -636,6 +671,9 @@ static void fill_rows(lv_grid_t *grid, int row_start, int row_end) {
 }
 
 static bool grid_recycle_item(lv_grid_t *grid, int position, bool optional) {
+    if (position == grid->focused_index) {
+        return false;
+    }
     // Move item from inuse pool to free pool
     lv_obj_t *item = view_pool_take_by_position(&grid->pool_inuse, position);
     if (optional && item == NULL) {
