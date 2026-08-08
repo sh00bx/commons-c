@@ -77,6 +77,8 @@ static void update_grid(lv_grid_t *grid);
 
 static bool grid_recycle_item(lv_grid_t *grid, int position, bool optional);
 
+static void grid_recycle_out_of_range(lv_grid_t *grid);
+
 static lv_obj_t *grid_obtain_item(lv_grid_t *grid, int position, bool *created);
 
 static lv_obj_t *view_pool_take_by_position(view_pool_ll_t **pool, int position);
@@ -210,6 +212,7 @@ void lv_gridview_set_data_advanced(lv_obj_t *obj, void *data, const lv_gridview_
         }
     }
     update_grid(grid);
+    grid_recycle_out_of_range(grid);
 
     grid->changes = NULL;
     grid->num_changes = 0;
@@ -619,7 +622,11 @@ static void update_grid(lv_grid_t *grid) {
 }
 
 static void clear_rows(lv_grid_t *grid) {
-    for (int row_idx = LV_MAX(0, grid->row_start); row_idx < grid->row_end; row_idx++) {
+    /* row_end is the last rendered row, inclusive -- same convention fill_rows()
+     * uses. Stopping short of it left that row's views in the in-use pool while
+     * every caller of this function means "scrap what is on screen", so they
+     * kept both their old content and their old grid cell. */
+    for (int row_idx = LV_MAX(0, grid->row_start); row_idx <= grid->row_end; row_idx++) {
         for (int col_idx = 0; col_idx < grid->column_count; col_idx++) {
             int position = row_idx * grid->column_count + col_idx;
             if (position >= grid->item_count) continue;
@@ -684,6 +691,33 @@ static bool grid_recycle_item(lv_grid_t *grid, int position, bool optional) {
     lv_obj_add_flag(item, LV_OBJ_FLAG_HIDDEN);
     view_pool_put(&grid->pool_free, -1, item);
     return true;
+}
+
+/**
+ * Recycle every in-use view that sits past the end of the current data set.
+ *
+ * Nothing else does this: clear_rows() and fill_rows() both skip positions
+ * `>= item_count`, which is exactly the set of views a *shrinking* data set
+ * orphans. Left alone they stay visible, still showing the previous data set,
+ * and still assigned to grid rows the new row descriptor no longer has -- so
+ * the grid layout reads past its own row array and drops them at arbitrary
+ * positions over the new content.
+ */
+static void grid_recycle_out_of_range(lv_grid_t *grid) {
+    /* grid_recycle_item() refuses to touch the focused view, and a focused
+     * index past the end of the data does not address anything anymore. */
+    if (grid->focused_index >= grid->item_count) {
+        grid->focused_index = -1;
+    }
+    view_pool_ll_t *cur = grid->pool_inuse;
+    while (cur != NULL) {
+        /* grid_recycle_item() unlinks and frees this node, so step first. */
+        view_pool_ll_t *next = cur->next;
+        if (cur->position >= grid->item_count) {
+            grid_recycle_item(grid, cur->position, true);
+        }
+        cur = next;
+    }
 }
 
 static lv_obj_t *grid_obtain_item(lv_grid_t *grid, int position, bool *created) {
