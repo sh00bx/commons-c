@@ -26,6 +26,12 @@ if (DEFINED SDL2_BACKPORT_RELEASE)
             BUILD_BYPRODUCTS <INSTALL_DIR>/lib/${LIB_FILENAME}
     )
 elseif (DEFINED SDL2_BACKPORT_REVISION)
+    # Where SDL2_BACKPORT_REVISION is checked out from. Point it at a fork or a
+    # local clone to build a revision the upstream repository does not have.
+    if (NOT DEFINED SDL2_BACKPORT_GIT_REPOSITORY)
+        set(SDL2_BACKPORT_GIT_REPOSITORY "https://github.com/webosbrew/SDL-webOS.git" CACHE STRING
+                "Git repository SDL2_BACKPORT_REVISION is checked out from")
+    endif ()
     if (CMAKE_BUILD_TYPE STREQUAL "Release")
         set(EXT_SDL2_BACKPORT_BUILD_TYPE "Release")
     else ()
@@ -33,7 +39,7 @@ elseif (DEFINED SDL2_BACKPORT_REVISION)
     endif ()
 
     ExternalProject_Add(ext_sdl2_backport
-            GIT_REPOSITORY "https://github.com/webosbrew/SDL-webOS.git"
+            GIT_REPOSITORY "${SDL2_BACKPORT_GIT_REPOSITORY}"
             GIT_TAG "${SDL2_BACKPORT_REVISION}"
             CMAKE_ARGS ${EXT_SDL2_BACKPORT_TOOLCHAIN_ARGS}
             -DCMAKE_BUILD_TYPE:string=${EXT_SDL2_BACKPORT_BUILD_TYPE}
